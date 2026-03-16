@@ -9,20 +9,26 @@ from adss.exceptions import AuthenticationError
 from adss.utils import handle_response_errors
 from adss.models.user import User
 
-
 # --- internal defaults (safe timeouts; env-overridable) ---
 _CONNECT_TIMEOUT = float(os.getenv("ADSS_CONNECT_TIMEOUT", "5"))
-_READ_TIMEOUT    = float(os.getenv("ADSS_READ_TIMEOUT", "600"))
+_READ_TIMEOUT = float(os.getenv("ADSS_READ_TIMEOUT", "600"))
 _DEFAULT_TIMEOUT = (_CONNECT_TIMEOUT, _READ_TIMEOUT)
 
-_TOTAL_RETRIES   = int(os.getenv("ADSS_RETRY_TOTAL", "3"))
-_BACKOFF_FACTOR  = float(os.getenv("ADSS_RETRY_BACKOFF", "0.5"))
-_TRUST_ENV       = os.getenv("ADSS_TRUST_ENV", "1").lower() not in ("0", "false", "no")
-_FORCE_CLOSE_STREAMS = os.getenv("ADSS_FORCE_CLOSE_STREAMS", "0").lower() in ("1", "true", "yes")
+_TOTAL_RETRIES = int(os.getenv("ADSS_RETRY_TOTAL", "3"))
+_BACKOFF_FACTOR = float(os.getenv("ADSS_RETRY_BACKOFF", "0.5"))
+_TRUST_ENV = os.getenv("ADSS_TRUST_ENV", "1").lower() not in ("0", "false", "no")
+_FORCE_CLOSE_STREAMS = os.getenv("ADSS_FORCE_CLOSE_STREAMS", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
-def _read_all_bytes(resp: httpx.Response,
-                    chunk_size: int = 1024 * 1024,
-                    total_timeout: Optional[float] = None) -> bytes:
+
+def _read_all_bytes(
+    resp: httpx.Response,
+    chunk_size: int = 1024 * 1024,
+    total_timeout: Optional[float] = None,
+) -> bytes:
     """
     Stream the response body to memory and return bytes.
     - Respects httpx read timeout between chunks (via iter_bytes()).
@@ -78,6 +84,7 @@ def _read_all_bytes(resp: httpx.Response,
     resp.close()
     return data
 
+
 def _to_httpx_timeout(t):
     """Map (connect, read) tuple or scalar into httpx.Timeout."""
     if isinstance(t, tuple) and len(t) == 2:
@@ -85,7 +92,12 @@ def _to_httpx_timeout(t):
         return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)
     if isinstance(t, (int, float)):
         return httpx.Timeout(t)
-    return httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=_READ_TIMEOUT, pool=_CONNECT_TIMEOUT)
+    return httpx.Timeout(
+        connect=_CONNECT_TIMEOUT,
+        read=_READ_TIMEOUT,
+        write=_READ_TIMEOUT,
+        pool=_CONNECT_TIMEOUT,
+    )
 
 
 def _attach_requests_compat(resp: httpx.Response):
@@ -100,24 +112,30 @@ def _attach_requests_compat(resp: httpx.Response):
 
     # requests-like streaming
     if not hasattr(resp, "iter_content"):
+
         def iter_content(chunk_size: int = 1024 * 1024):
             return resp.iter_bytes(chunk_size=chunk_size)
+
         setattr(resp, "iter_content", iter_content)
 
     # requests-like raw.read()
     if not hasattr(resp, "raw"):
+
         class _RawAdapter:
             def __init__(self, r: httpx.Response):
                 self._r = r
+
             def read(self, amt: Optional[int] = None) -> bytes:
                 # Use the same safe read under the hood
-                return getattr(self._r, "read")( )
+                return getattr(self._r, "read")()
+
         setattr(resp, "raw", _RawAdapter(resp))
 
     # ---- SAFE .read(): stream to memory, cache, and close ----
     # Only replace if httpx hasn't already cached content
-    def _safe_read(self, *, chunk_size: int = 1024 * 1024,
-                   total_timeout: Optional[float] = None) -> bytes:
+    def _safe_read(
+        self, *, chunk_size: int = 1024 * 1024, total_timeout: Optional[float] = None
+    ) -> bytes:
         # If httpx already cached, return it (idempotent)
         if hasattr(self, "_content"):
             return self._content
@@ -141,7 +159,10 @@ def _attach_requests_compat(resp: httpx.Response):
                     break
                 buf.write(chunk)
                 bytes_read += len(chunk)
-                if total_timeout is not None and (time.monotonic() - start) > total_timeout:
+                if (
+                    total_timeout is not None
+                    and (time.monotonic() - start) > total_timeout
+                ):
                     raise ReadTimeout("overall read timeout exceeded")
         except (ReadTimeout, RemoteProtocolError, TransportError) as e:
             # Ensure the socket is cleaned up
@@ -167,6 +188,7 @@ def _attach_requests_compat(resp: httpx.Response):
 
     # Bind as a method (so `resp.read()` calls _safe_read)
     import types
+
     resp.read = types.MethodType(_safe_read, resp)  # type: ignore[attr-defined]
 
     return resp
@@ -178,16 +200,16 @@ class Auth:
     """
 
     def __init__(self, base_url: str, verify_ssl: bool = True):
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.token: Optional[str] = None
         self.current_user: Optional[User] = None
         self.verify_ssl = verify_ssl
 
         # Single keep-alive client; set verify at construction.
         self._client = httpx.Client(
-            trust_env=_TRUST_ENV, 
-            verify=self.verify_ssl, 
-            limits=httpx.Limits(max_keepalive_connections=0, max_connections=10)
+            trust_env=_TRUST_ENV,
+            verify=self.verify_ssl,
+            limits=httpx.Limits(max_keepalive_connections=0, max_connections=10),
         )
 
     def login(self, username: str, password: str, **kwargs) -> Tuple[str, User]:
@@ -199,11 +221,7 @@ class Auth:
 
         try:
             response = self.request(
-                method="POST",
-                url=login_url,
-                auth_required=False,
-                data=data,
-                **kwargs
+                method="POST", url=login_url, auth_required=False, data=data, **kwargs
             )
             handle_response_errors(response)
 
@@ -242,7 +260,7 @@ class Auth:
                 url=me_url,
                 headers=auth_headers,
                 auth_required=True,
-                **kwargs
+                **kwargs,
             )
             handle_response_errors(response)
 
@@ -261,7 +279,11 @@ class Auth:
     # ---------------- core helpers ---------------- #
 
     def _full_url(self, url: str) -> str:
-        return url if url.startswith(('http://', 'https://')) else f"{self.base_url}/{url.lstrip('/')}"
+        return (
+            url
+            if url.startswith(("http://", "https://"))
+            else f"{self.base_url}/{url.lstrip('/')}"
+        )
 
     def _request_with_retries_nonstream(
         self,
@@ -294,7 +316,7 @@ class Auth:
                 last_exc = e
                 if attempt >= _TOTAL_RETRIES:
                     break
-                time.sleep(_BACKOFF_FACTOR * (2 ** attempt))
+                time.sleep(_BACKOFF_FACTOR * (2**attempt))
         raise requests.RequestException(str(last_exc))  # noqa: B904
 
     def _request_with_retries_stream(
@@ -332,6 +354,7 @@ class Auth:
                 resp = cm.__enter__()  # don't exit: let caller iterate/close
                 # Make close() also exit the context manager safely
                 _orig_close = resp.close
+
                 def _close():
                     try:
                         _orig_close()
@@ -340,13 +363,14 @@ class Auth:
                             cm.__exit__(None, None, None)
                         except Exception:
                             pass
+
                 resp.close = _close  # type: ignore[attr-defined]
                 return resp
             except httpx.RequestError as e:
                 last_exc = e
                 if attempt >= _TOTAL_RETRIES:
                     break
-                time.sleep(_BACKOFF_FACTOR * (2 ** attempt))
+                time.sleep(_BACKOFF_FACTOR * (2**attempt))
         raise requests.RequestException(str(last_exc))  # noqa: B904
 
     # ---------------- public API (unchanged signatures) ------------------- #
@@ -357,7 +381,7 @@ class Auth:
         url: str,
         headers: Optional[Dict[str, str]] = None,
         auth_required: bool = False,
-        **kwargs
+        **kwargs,
     ) -> requests.Response:
         """
         Make an HTTP request with automatic base_url prefix, SSL config, and auth headers.
@@ -373,18 +397,18 @@ class Auth:
             final_headers.update(headers)
 
         # Map requests-style kwargs to httpx
-        timeout   = _to_httpx_timeout(kwargs.pop('timeout', _DEFAULT_TIMEOUT))
-        follow_redirects = kwargs.pop('allow_redirects', True)
-        stream_flag = bool(kwargs.pop('stream', False))
+        timeout = _to_httpx_timeout(kwargs.pop("timeout", _DEFAULT_TIMEOUT))
+        follow_redirects = kwargs.pop("allow_redirects", True)
+        stream_flag = bool(kwargs.pop("stream", False))
 
         # (verify is fixed per-client at __init__; ignore/strip any incoming 'verify' kw)
-        kwargs.pop('verify', None)
+        kwargs.pop("verify", None)
 
         # Build payload pieces compatibly
-        params = kwargs.pop('params', None)
-        data   = kwargs.pop('data', None)
-        json_  = kwargs.pop('json', None)
-        files  = kwargs.pop('files', None)
+        params = kwargs.pop("params", None)
+        data = kwargs.pop("data", None)
+        json_ = kwargs.pop("json", None)
+        files = kwargs.pop("files", None)
 
         if stream_flag:
             resp = self._request_with_retries_stream(
@@ -423,7 +447,7 @@ class Auth:
         headers: Optional[Dict[str, str]] = None,
         auth_required: bool = False,
         timeout: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ) -> requests.Response:
         """
         Like request(), but always streams the body.
@@ -446,17 +470,17 @@ class Auth:
             final_headers.setdefault("Connection", "close")
 
         if timeout is None:
-            timeout   = _to_httpx_timeout(kwargs.pop('timeout', _DEFAULT_TIMEOUT))
+            timeout = _to_httpx_timeout(kwargs.pop("timeout", _DEFAULT_TIMEOUT))
         else:
             timeout = _to_httpx_timeout(timeout)
-        
-        follow_redirects = kwargs.pop('allow_redirects', True)
-        kwargs.pop('verify', None)  # verify is fixed on client
 
-        params = kwargs.pop('params', None)
-        data   = kwargs.pop('data', None)
-        json_  = kwargs.pop('json', None)
-        files  = kwargs.pop('files', None)
+        follow_redirects = kwargs.pop("allow_redirects", True)
+        kwargs.pop("verify", None)  # verify is fixed on client
+
+        params = kwargs.pop("params", None)
+        data = kwargs.pop("data", None)
+        json_ = kwargs.pop("json", None)
+        files = kwargs.pop("files", None)
 
         resp = self._request_with_retries_stream(
             method=method,
@@ -480,7 +504,7 @@ class Auth:
         auth_required: bool = False,
         timeout: Optional[float | Tuple[float, float]] = None,
         total_timeout: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ) -> bytes:
         """
         Stream a large body and return bytes.
@@ -504,13 +528,13 @@ class Auth:
             timeout = _to_httpx_timeout(_DEFAULT_TIMEOUT)
         else:
             timeout = _to_httpx_timeout(timeout)
-        follow_redirects = kwargs.pop('allow_redirects', True)
-        kwargs.pop('verify', None)
+        follow_redirects = kwargs.pop("allow_redirects", True)
+        kwargs.pop("verify", None)
 
-        params = kwargs.pop('params', None)
-        data   = kwargs.pop('data', None)
-        json_  = kwargs.pop('json', None)
-        files  = kwargs.pop('files', None)
+        params = kwargs.pop("params", None)
+        data = kwargs.pop("data", None)
+        json_ = kwargs.pop("json", None)
+        files = kwargs.pop("files", None)
 
         # open the stream
         resp = self._request_with_retries_stream(
