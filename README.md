@@ -7,6 +7,16 @@ This repository provides a set of tools for querying astronomical ADSS services 
 
 Github repository: [https://github.com/schwarzam/adss](https://github.com/schwarzam/adss)
 
+## Requirements
+
+- Python 3.8+
+
+## Development Installation
+
+```bash
+pip install -e ".[test,dev]"
+```
+
 ## Installation
 
 ```bash

@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 import requests  # kept for compatibility (exceptions/type expectations)
 import httpx
@@ -502,7 +502,7 @@ class Auth:
         url: str,
         headers: Optional[Dict[str, str]] = None,
         auth_required: bool = False,
-        timeout: Optional[float | Tuple[float, float]] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
         total_timeout: Optional[float] = None,
         **kwargs,
     ) -> bytes:

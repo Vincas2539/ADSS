@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - name: Checkout
@@ -37,10 +37,8 @@ jobs:
 
       - name: Install package and dev/test tools
         run: |
-          # install the package in editable mode
-          python -m pip install -e .
-          # CI dev/test tools
-          python -m pip install pytest flake8 black ruff
+          # install package with dev/test extras
+          python -m pip install -e ".[test,dev]"
 
       - name: Black format check
         run: python -m black --check .
@@ -48,3 +46,6 @@ jobs:
       - name: Ruff lint
         continue-on-error: true
         run: python -m ruff check .
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
