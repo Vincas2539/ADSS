@@ -68,16 +68,6 @@ def mock_role_dict():
 
 
 @pytest.fixture
-def mock_http_response():
-    """Fixture for a mock HTTP response."""
-    response = MagicMock()
-    response.status_code = 200
-    response.headers = {"Content-Type": "application/json"}
-    response.text = '{"success": true}'
-    return response
-
-
-@pytest.fixture
 def mock_base_url():
     """Fixture for a base API URL."""
     return "https://api.example.com"
@@ -93,18 +83,6 @@ def mock_username():
 def mock_password():
     """Fixture for a test password."""
     return "testpass123"
-
-
-@pytest.fixture
-def mock_auth(mock_base_url):
-    """Fixture for a mocked Auth instance."""
-    with patch("adss.auth.Auth") as MockAuth:
-        auth = Mock()
-        auth.base_url = mock_base_url
-        auth.token = "mock_token_abc123"
-        auth.user = None
-        MockAuth.return_value = auth
-        yield auth
 
 
 @pytest.fixture

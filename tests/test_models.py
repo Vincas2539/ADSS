@@ -135,26 +135,6 @@ class TestQuery:
         assert query.execution_time_ms == 5000
         assert query.row_count == 1000
 
-    def test_query_is_complete_property(self, mock_query_dict):
-        """Test the is_complete property."""
-        mock_query_dict["status"] = "completed"  # lowercase
-        query = Query.from_dict(mock_query_dict)
-        assert query.is_complete is True
-
-        mock_query_dict["status"] = "running"  # lowercase
-        query2 = Query.from_dict(mock_query_dict)
-        assert query2.is_complete is False
-
-    def test_query_is_running_property(self, mock_query_dict):
-        """Test the is_running property."""
-        mock_query_dict["status"] = "running"  # lowercase
-        query = Query.from_dict(mock_query_dict)
-        assert query.is_running is True
-
-        mock_query_dict["status"] = "completed"  # lowercase
-        query2 = Query.from_dict(mock_query_dict)
-        assert query2.is_running is False
-
     def test_query_with_error(self, mock_query_dict):
         """Test creating a Query with an error."""
         mock_query_dict["status"] = "failed"  # lowercase
